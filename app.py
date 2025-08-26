@@ -30,7 +30,4 @@ def get_event_descriptions() -> dict:
     }
     return event_descriptions
 
-
-# Expose an ASGI app for HTTP transport so it can be served by uvicorn
-#app = mcp.http_app()
 app = mcp.http_app(path="/mcp")
