@@ -26,7 +26,7 @@ Put in the following config
 ```json
 {
   "mcpServers": {
-    "dcmcp": {
+    "MAC Data Catalog": {
       "command": "npx",
       "args": [
         "-y",
@@ -63,7 +63,7 @@ Go to Cursor Settings -> MCP & Integrations, under MCP Tools add a new MCP Serve
 ```json
 {
   "mcpServers": {
-    "Data Catalog MCP": {
+    "MAC Data Catalog": {
       "command": "npx",
       "args": [
         "-y",
