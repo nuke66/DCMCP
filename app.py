@@ -1,9 +1,9 @@
-from fastmcp import FastMCP
+from fastmcp import FastMCP  # user the FastMCP v2.0 implementation which is faster https://gofastmcp.com/getting-started/installation
 import pandas as pd
 
 mcp = FastMCP(
     name="Data Catalog MCP",
-    instructions="MCP server exposing information about the MAC data catalog"
+    instructions="MCP server exposing information about the data catalog"
 )
 
 
@@ -20,13 +20,9 @@ def get_event_descriptions() -> dict:
     The key is the event name, the value is the description.
     """
     event_descriptions = {
-        "component_interaction": "When a user has any of the following interactions with a component on the website:  click, expand, collapse, check, uncheck, open, close",
-        "wayfinder_start": "This event should be triggered when a user clicks on one of the first wayfinder questions, located on the homepage.",
-        "wayfinder_next": "This event should be triggered when a user clicks ‘next’ as they progress through the wayfinder tool. It should also be triggered if a user navigates back and then updates their selection.",
-        "wayfinder_back": "This event should be triggered when a user clicks ‘back’ as they progress through the wayfinder tool.",
-        "wayfinder_complete": "This event should be triggered when a user completes the wayfinder tool ie. by pressing the final button on their selected flow (‘What’s my next step?').",
-        "outlet_interaction": "This interaction fires across multiple areas of the site - when a user interacts with an outlet card. \n\nInteractions may include: click to call, add to shortlist, see details click, add to compare, remove from compare, add note.",
-        "outlet_view": "This event will fire when a user views an Outlet detail page (of any care type).",
+        "open_seasame": "Send when a user opens the xyz component",
+        "show_more": "Event fired then user clicks on the show me more button",
+        "see_more": "This event tracks when a users clicks a pagination link to view another set of results"
     }
     return event_descriptions
 
