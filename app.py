@@ -4,6 +4,11 @@ import logging
 import time
 import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
+import inspect
+from functools import wraps
+import os
+from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 mcp = FastMCP(
     name="Data Catalog MCP",
@@ -16,14 +21,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         # Use our own logger to avoid uvicorn's AccessFormatter tuple expectations
         self.logger = logger or logging.getLogger("mcp.request")
-        # Ensure logs are emitted even if root/uvicorn configs don't include this logger
-        self.logger.setLevel(logging.INFO)
-        if not self.logger.handlers:
-            _handler = logging.StreamHandler()
-            _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-            self.logger.addHandler(_handler)
-        # Prevent double-logging if parent/root also handles records
-        self.logger.propagate = False
+        _setup_logger_with_stream_and_file(self.logger, "requests.log")
 
     async def dispatch(self, request, call_next):
         request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
@@ -44,13 +42,74 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+def _setup_logger_with_stream_and_file(logger: logging.Logger, filename: str) -> None:
+    """Attach a stream handler and a rotating file handler to the given logger.
+
+    Logs are written to stdout and to a file under LOG_DIR (defaults to shared_data/logs).
+    """
+    # Ensure logs are emitted even if root/uvicorn configs don't include this logger
+    logger.setLevel(logging.INFO)
+    if logger.handlers:
+        # Assume logger is already configured
+        logger.propagate = False
+        return
+
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+
+    # Stream handler (console)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+
+    # File handler (rotating)
+    base_dir = Path(os.environ.get("LOG_DIR", str(Path("shared_data") / "logs")))
+    try:
+        base_dir.mkdir(parents=True, exist_ok=True)
+        file_handler = RotatingFileHandler(base_dir / filename, maxBytes=5_000_000, backupCount=5, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except Exception as e:
+        # If file handler fails, we still have the stream handler; log a warning once
+        fallback_logger = logging.getLogger("mcp.init")
+        fallback_logger.setLevel(logging.INFO)
+        if not fallback_logger.handlers:
+            fallback_stream = logging.StreamHandler()
+            fallback_stream.setFormatter(formatter)
+            fallback_logger.addHandler(fallback_stream)
+        fallback_logger.warning(f"Failed to initialize file logging for {logger.name}: {e}")
+
+    # Prevent double-logging if parent/root also handles records
+    logger.propagate = False
+
+
+# Log tool requests and their parameters
+tool_logger = logging.getLogger("mcp.tool")
+_setup_logger_with_stream_and_file(tool_logger, "tools.log")
+
+
+def log_tool(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            bound = inspect.signature(func).bind_partial(*args, **kwargs)
+            bound.apply_defaults()
+            params = dict(bound.arguments)
+        except Exception:
+            params = {"args": args, "kwargs": kwargs}
+        tool_logger.info(f'tool_request name={func.__name__} params={params}')
+        return func(*args, **kwargs)
+    return wrapper
+
+
 @mcp.tool
+@log_tool
 def add(a: int, b: int) -> dict:
     """Add two numbers and return the sum as {\"sum\": int}."""
     return {"sum": int(pd.DataFrame({"a": [a], "b": [b]}).eval("a+b").iloc[0])}
 
 
 @mcp.tool
+@log_tool
 def get_event_descriptions() -> dict:
     """
     Return a mapping of all event names and their descriptions from the data catalog.
