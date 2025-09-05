@@ -3,7 +3,7 @@ import pandas as pd
 import logging
 import time
 import uuid
-from starlette.middleware.base import BaseHTTPMiddleware
+from typing import Callable, Awaitable, Optional
 import inspect
 from functools import wraps
 import os
@@ -16,30 +16,80 @@ mcp = FastMCP(
 )
 
 
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, logger: logging.Logger | None = None) -> None:
-        super().__init__(app)
-        # Use our own logger to avoid uvicorn's AccessFormatter tuple expectations
+class StreamingSafeRequestLoggingMiddleware:
+    """
+    ASGI middleware that logs requests without interfering with streaming/SSE.
+
+    Avoids Starlette's BaseHTTPMiddleware which can buffer responses and break streams.
+    """
+
+    def __init__(self, app, logger: Optional[logging.Logger] = None) -> None:
+        self.app = app
         self.logger = logger or logging.getLogger("mcp.request")
         _setup_logger_with_stream_and_file(self.logger, "requests.log")
 
-    async def dispatch(self, request, call_next):
-        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+
         start_time = time.perf_counter()
 
-        response = await call_next(request)
+        # Extract inbound request info
+        method = scope.get("method", "-")
+        path = scope.get("raw_path") or scope.get("path", "-")
+        if isinstance(path, (bytes, bytearray)):
+            try:
+                path = path.decode("utf-8", errors="ignore")
+            except Exception:
+                path = "-"
+        client_host = "-"
+        if scope.get("client") and isinstance(scope["client"], (list, tuple)) and scope["client"]:
+            client_host = scope["client"][0] or "-"
 
-        duration_ms = int((time.perf_counter() - start_time) * 1000)
-        client = request.client.host if getattr(request, "client", None) else "-"
+        # Correlate request id
+        request_id = None
+        try:
+            headers = dict((k.lower(), v) for k, v in ((h[0].decode(), h[1].decode()) for h in scope.get("headers", [])))
+            request_id = headers.get("x-request-id")
+        except Exception:
+            request_id = None
+        if not request_id:
+            request_id = str(uuid.uuid4())
 
-        # Log in a format similar to common access logs with extras
-        self.logger.info(
-            f'{client} - "{request.method} {request.url.path}" {response.status_code} {duration_ms}ms req_id={request_id}'
-        )
+        status_code_holder = {"status": 200}
+        logged = {"done": False}
 
-        # Echo request id back to caller for correlation
-        response.headers["x-request-id"] = request_id
-        return response
+        async def send_wrapper(message):
+            # Inject correlation header on response start
+            if message.get("type") == "http.response.start":
+                status_code_holder["status"] = int(message.get("status", 200))
+                headers = list(message.get("headers", []))
+                try:
+                    headers.append([b"x-request-id", request_id.encode("utf-8")])
+                except Exception:
+                    pass
+                message["headers"] = headers
+
+            # When the body is finished (no more_body), log the request
+            if message.get("type") == "http.response.body" and not message.get("more_body", False) and not logged["done"]:
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                self.logger.info(
+                    f'{client_host} - "{method} {path}" {status_code_holder["status"]} {duration_ms}ms req_id={request_id}'
+                )
+                logged["done"] = True
+
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception:
+            # Ensure we log even on error paths
+            if not logged["done"]:
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                self.logger.info(
+                    f'{client_host} - "{method} {path}" 500 {duration_ms}ms req_id={request_id}'
+                )
+            raise
 
 
 def _setup_logger_with_stream_and_file(logger: logging.Logger, filename: str) -> None:
@@ -123,4 +173,4 @@ def get_event_descriptions() -> dict:
     return event_descriptions
 
 app = mcp.http_app(path="/mcp")
-app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(StreamingSafeRequestLoggingMiddleware)

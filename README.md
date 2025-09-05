@@ -30,11 +30,13 @@ Put in the following config
       "command": "npx",
       "args": [
         "-y",
-        "mcp-remote",
-        "http://localhost:8005/",
+        "mcp-remote@latest",
+        "http://localhost:8005/mcp",
         "--transport",
-        "http-first",
-        "--allow-http"
+        "http",
+        "--allow-http",
+        "--request-timeout",
+        "60000"
       ]
     }
   }
@@ -63,14 +65,12 @@ Go to Cursor Settings -> MCP & Integrations, under MCP Tools add a new MCP Serve
 ```json
 {
   "mcpServers": {
-    "Data Catalog": {
+    "data-catalog": {
       "command": "npx",
       "args": [
         "-y",
         "mcp-remote",
         "http://localhost:8005/mcp",
-        "--transport",
-        "http-first",
         "--allow-http"
       ]
     }
