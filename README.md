@@ -98,6 +98,19 @@ The MCP HTTP endpoint will be served at `http://localhost:8005/`.
 
 
 
+## Environment (.env)
+
+Create a `.env` file (the app loads it automatically at startup):
+
+```bash
+cp .env.example .env
+# then edit .env
+```
+
+- **LOG_DIR**: directory for application logs. Defaults to `shared_data/logs`. Override in `.env` if you want logs elsewhere.
+- When using Docker Compose, `.env` is loaded via `env_file` and variables are available in the container.
+
+
 ## References
 
 - Official Python SDK for MCP server: `https://github.com/modelcontextprotocol/python-sdk`

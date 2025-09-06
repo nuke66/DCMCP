@@ -9,6 +9,10 @@ from functools import wraps
 import os
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
+from dotenv import load_dotenv
+
+# Load environment variables from a .env file if present
+load_dotenv()
 
 mcp = FastMCP(
     name="Data Catalog MCP",
