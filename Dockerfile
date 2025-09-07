@@ -58,5 +58,5 @@ EXPOSE 8005
 
 # Run the application.
 #CMD uvicorn 'app:app' --host=0.0.0.0 --port=8005
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8005", "--log-level", "debug"]
-
+#CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8005", "--log-level", "debug"]
+CMD ["uvicorn","app:app","--host","0.0.0.0","--port","8005","--log-level","debug","--timeout-keep-alive","75"]

@@ -25,6 +25,8 @@ class TokenAuthMiddleware:
 		# Log once if auth disabled
 		if not self.expected_token:
 			auth_logger.info("AUTH_TOKEN not set; authentication is DISABLED")
+		else:
+			auth_logger.info("AUTH_TOKEN configured; authentication is ENABLED")
 
 	async def __call__(self, scope, receive, send):
 		if scope.get("type") != "http":
